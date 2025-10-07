@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { ReceiptForm } from "./components/ReceiptForm";
 import { ReceiptTemplate } from "./components/ReceiptTemplate";
+import { ParkingProfileManager, ParkingProfile } from "./components/ParkingProfileManager";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
@@ -222,6 +223,17 @@ export default function App() {
     setIsGenerating(false);
   };
 
+  const handleSelectProfile = (profile: ParkingProfile) => {
+    setReceiptData({
+      ...receiptData,
+      companyName: profile.companyName,
+      parkingLotName: profile.parkingLotName,
+      phoneNumber: profile.phoneNumber,
+      registrationNumber: profile.registrationNumber,
+    });
+    setActiveTab("form");
+  };
+
   // Format data for display
   const formattedData = {
     ...receiptData,
@@ -284,10 +296,17 @@ export default function App() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+          <TabsList className="grid w-full max-w-2xl mx-auto grid-cols-3">
+            <TabsTrigger value="profiles">プロファイル管理</TabsTrigger>
             <TabsTrigger value="form">入力フォーム</TabsTrigger>
             <TabsTrigger value="preview">プレビュー</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="profiles" className="mt-6">
+            <div className="flex justify-center">
+              <ParkingProfileManager onSelectProfile={handleSelectProfile} />
+            </div>
+          </TabsContent>
 
           <TabsContent value="form" className="mt-6">
             <div className="space-y-6">

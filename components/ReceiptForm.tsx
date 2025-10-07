@@ -2,6 +2,17 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { useState, useEffect } from "react";
+import { Building2 } from "lucide-react";
+
+interface ParkingProfile {
+  id: string;
+  name: string;
+  companyName: string;
+  parkingLotName: string;
+  phoneNumber: string;
+  registrationNumber: string;
+}
 
 interface ReceiptData {
   companyName: string;
@@ -21,9 +32,41 @@ interface ReceiptFormProps {
   onGenerateURL: () => void;
 }
 
+const STORAGE_KEY = "parking_profiles";
+
 export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps) {
+  const [profiles, setProfiles] = useState<ParkingProfile[]>([]);
+  const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+
+  // Load profiles from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setProfiles(parsed);
+      } catch (error) {
+        console.error("Failed to load profiles:", error);
+      }
+    }
+  }, []);
+
   const handleChange = (field: keyof ReceiptData, value: string | number) => {
     onChange({ ...data, [field]: value });
+  };
+
+  const handleSelectProfile = (profileId: string) => {
+    setSelectedProfileId(profileId);
+    const profile = profiles.find((p) => p.id === profileId);
+    if (profile) {
+      onChange({
+        ...data,
+        companyName: profile.companyName,
+        parkingLotName: profile.parkingLotName,
+        phoneNumber: profile.phoneNumber,
+        registrationNumber: profile.registrationNumber,
+      });
+    }
   };
 
   return (
@@ -32,6 +75,32 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
         <CardTitle>領収書情報入力</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Profile Selection */}
+        {profiles.length > 0 && (
+          <div className="space-y-2 p-4 bg-primary/5 rounded-lg border-2 border-primary/20">
+            <Label htmlFor="profile-select" className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" />
+              登録済みプロファイルから選択
+            </Label>
+            <select
+              id="profile-select"
+              value={selectedProfileId}
+              onChange={(e) => handleSelectProfile(e.target.value)}
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">プロファイルを選択（またはマニュアル入力）</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name} - {profile.parkingLotName}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              プロファイルを選択すると、会社名・駐車場名・電話番号・登録番号が自動入力されます
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="companyName">会社名</Label>
