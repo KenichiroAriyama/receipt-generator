@@ -1,0 +1,2 @@
+# receipt-generator
+receipt-generator
