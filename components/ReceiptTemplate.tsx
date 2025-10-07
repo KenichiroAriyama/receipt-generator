@@ -7,6 +7,7 @@ interface ReceiptData {
   discount: number;
   receiptDate: string;
   managementNumber: string;
+  recipientName: string;
 }
 
 interface ReceiptTemplateProps {
@@ -60,6 +61,13 @@ export function ReceiptTemplate({ data }: ReceiptTemplateProps) {
                 <p className="leading-[1.25] text-nowrap whitespace-pre">お客様控え（ご利用明細書）</p>
               </div>
             </div>
+
+            {/* Recipient Name */}
+            {data.recipientName && (
+              <div className="flex flex-col font-['Noto_Sans_JP:Regular',_sans-serif] justify-center leading-[0] not-italic relative shrink-0 text-[#23221f] text-[40px] text-center text-nowrap">
+                <p className="leading-[1.25] whitespace-pre">{data.recipientName}</p>
+              </div>
+            )}
 
             {/* Receipt Details */}
             <div className="content-stretch flex flex-col gap-[40px] items-center relative shrink-0 w-full">

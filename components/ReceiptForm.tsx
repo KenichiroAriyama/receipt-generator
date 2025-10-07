@@ -12,6 +12,7 @@ interface ReceiptData {
   discount: number;
   receiptDate: string;
   managementNumber: string;
+  recipientName: string;
 }
 
 interface ReceiptFormProps {
@@ -38,7 +39,7 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
               id="companyName"
               value={data.companyName}
               onChange={(e) => handleChange("companyName", e.target.value)}
-              placeholder="株式���社ランディット"
+              placeholder="ランディット株式会社"
             />
           </div>
 
@@ -72,12 +73,22 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
             />
           </div>
 
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="recipientName">宛名</Label>
+            <Input
+              id="recipientName"
+              value={data.recipientName}
+              onChange={(e) => handleChange("recipientName", e.target.value)}
+              placeholder="山田太郎 様"
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="parkingFee">駐車料金（円）</Label>
             <Input
               id="parkingFee"
               type="number"
-              value={data.parkingFee}
+              value={data.parkingFee || ""}
               onChange={(e) => handleChange("parkingFee", parseInt(e.target.value) || 0)}
               placeholder="1000"
             />
@@ -88,7 +99,7 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
             <Input
               id="discount"
               type="number"
-              value={data.discount}
+              value={data.discount || ""}
               onChange={(e) => handleChange("discount", parseInt(e.target.value) || 0)}
               placeholder="100"
             />

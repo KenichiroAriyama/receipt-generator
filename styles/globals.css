@@ -193,3 +193,9 @@ html {
 body {
   font-family: 'Noto Sans JP', sans-serif;
 }
+
+/* Lighter placeholder color */
+::placeholder {
+  color: rgb(189, 189, 189);
+  opacity: 1;
+}

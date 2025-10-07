@@ -18,6 +18,7 @@ interface ReceiptData {
   discount: number;
   receiptDate: string;
   managementNumber: string;
+  recipientName: string;
 }
 
 // Helper function to format date value to Japanese format
@@ -43,6 +44,7 @@ function encodeReceiptData(data: ReceiptData): string {
       data.discount || 0,
       data.receiptDate || "",
       data.managementNumber || "",
+      data.recipientName || "",
     ];
     
     const json = JSON.stringify(compact);
@@ -92,6 +94,7 @@ function decodeReceiptData(encoded: string): ReceiptData | null {
       discount: compact[5] || 0,
       receiptDate: compact[6] || "",
       managementNumber: compact[7] || "",
+      recipientName: compact[8] || "",
     };
   } catch (error) {
     console.error("Failed to decode receipt data:", error);
@@ -120,6 +123,7 @@ export default function App() {
     discount: 0,
     receiptDate: "",
     managementNumber: "",
+    recipientName: "",
   });
 
   // Check URL parameters on mount and load receipt data
