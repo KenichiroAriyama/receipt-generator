@@ -147,17 +147,24 @@ export default function App() {
     }
 
     try {
-      // Wait a bit more to ensure everything is rendered
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Wait for fonts to load
+      await document.fonts.ready;
+      
+      // Additional delay to ensure rendering is complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      console.log("Generating PDF from element:", receiptRef.current);
       
       const canvas = await html2canvas(receiptRef.current, {
         scale: 2,
         useCORS: true,
-        logging: false,
+        logging: true,
         backgroundColor: "#ffffff",
-        windowWidth: receiptRef.current.scrollWidth,
-        windowHeight: receiptRef.current.scrollHeight,
+        width: receiptRef.current.scrollWidth,
+        height: receiptRef.current.scrollHeight,
       });
+
+      console.log("Canvas created:", canvas.width, "x", canvas.height);
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
@@ -174,6 +181,8 @@ export default function App() {
       // Download PDF
       const fileName = `領収書_${data.managementNumber || 'receipt'}.pdf`;
       pdf.save(fileName);
+      
+      console.log("PDF downloaded successfully");
     } catch (error) {
       console.error("PDF generation failed:", error);
       alert("PDF生成に失敗しました。もう一度お試しください。");
@@ -253,8 +262,8 @@ export default function App() {
           </div>
 
           {/* Hidden receipt template for PDF generation */}
-          <div className="sr-only">
-            <div ref={receiptRef}>
+          <div className="fixed left-[-9999px] top-0 bg-white">
+            <div ref={receiptRef} style={{ width: '794px' }}>
               <ReceiptTemplate data={formattedData} />
             </div>
           </div>
