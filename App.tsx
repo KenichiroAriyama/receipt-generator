@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { Download, Link2 } from "lucide-react";
+import pako from "pako";
 
 interface ReceiptData {
   companyName: string;
@@ -29,17 +30,69 @@ function formatDate(dateString: string): string {
   return `${year}/${month}/${day}`;
 }
 
-// Encode receipt data to URL parameter
+// Encode receipt data to URL parameter with compression
 function encodeReceiptData(data: ReceiptData): string {
-  const json = JSON.stringify(data);
-  return btoa(encodeURIComponent(json));
+  try {
+    // Create compact array format (omit empty/zero values)
+    const compact = [
+      data.companyName || "",
+      data.parkingLotName || "",
+      data.phoneNumber || "",
+      data.registrationNumber || "",
+      data.parkingFee || 0,
+      data.discount || 0,
+      data.receiptDate || "",
+      data.managementNumber || "",
+    ];
+    
+    const json = JSON.stringify(compact);
+    
+    // Compress using pako
+    const compressed = pako.deflate(json);
+    
+    // Convert to base64
+    const binary = String.fromCharCode.apply(null, Array.from(compressed));
+    return btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, ""); // URL-safe base64
+  } catch (error) {
+    console.error("Failed to encode receipt data:", error);
+    throw error;
+  }
 }
 
 // Decode receipt data from URL parameter
 function decodeReceiptData(encoded: string): ReceiptData | null {
   try {
-    const json = decodeURIComponent(atob(encoded));
-    return JSON.parse(json);
+    // Restore standard base64
+    let base64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    
+    // Decode base64
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    
+    // Decompress
+    const decompressed = pako.inflate(bytes, { to: "string" });
+    const compact = JSON.parse(decompressed);
+    
+    // Reconstruct full object
+    return {
+      companyName: compact[0] || "",
+      parkingLotName: compact[1] || "",
+      phoneNumber: compact[2] || "",
+      registrationNumber: compact[3] || "",
+      parkingFee: compact[4] || 0,
+      discount: compact[5] || 0,
+      receiptDate: compact[6] || "",
+      managementNumber: compact[7] || "",
+    };
   } catch (error) {
     console.error("Failed to decode receipt data:", error);
     return null;
@@ -59,43 +112,28 @@ export default function App() {
   const [autoDownloadTriggered, setAutoDownloadTriggered] = useState(false);
 
   const [receiptData, setReceiptData] = useState<ReceiptData>({
-    companyName: "株式会社ランディット",
-    parkingLotName: "綾瀬第2駐車場",
-    phoneNumber: "0120511441",
-    registrationNumber: "T9011001025282",
-    parkingFee: 1000,
-    discount: 100,
-    receiptDate: "2024-04-03",
-    managementNumber: "20240403001",
+    companyName: "",
+    parkingLotName: "",
+    phoneNumber: "",
+    registrationNumber: "",
+    parkingFee: 0,
+    discount: 0,
+    receiptDate: "",
+    managementNumber: "",
   });
 
-  // Check URL parameters on mount and auto-download PDF
+  // Check URL parameters on mount and load receipt data
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const receiptParam = urlParams.get("receipt");
     
-    if (receiptParam && !autoDownloadTriggered) {
+    if (receiptParam) {
       const decodedData = decodeReceiptData(receiptParam);
       if (decodedData) {
         setReceiptData(decodedData);
-        setAutoDownloadTriggered(true);
-        
-        // Wait for fonts to load before generating PDF
-        document.fonts.ready.then(() => {
-          // Additional delay to ensure component is fully rendered
-          setTimeout(() => {
-            downloadPDF(decodedData);
-          }, 1000);
-        }).catch((error) => {
-          console.error("Font loading failed:", error);
-          // Try to generate PDF anyway after a longer delay
-          setTimeout(() => {
-            downloadPDF(decodedData);
-          }, 2000);
-        });
       }
     }
-  }, [autoDownloadTriggered]);
+  }, []);
 
   // Generate PDF and download
   const downloadPDF = async (data: ReceiptData) => {
@@ -177,6 +215,51 @@ export default function App() {
     receiptDate: formatDate(receiptData.receiptDate),
   };
 
+  // Check if this is a download-only page (has receipt parameter in URL)
+  const isDownloadPage = hasReceiptParam;
+
+  // If this is a download page, show only the download button
+  if (isDownloadPage) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+        <div className="max-w-md w-full space-y-6">
+          <div className="text-center space-y-2">
+            <h1 className="text-[2.5rem] font-[var(--font-weight-medium)]">領収書</h1>
+            <p className="text-muted-foreground">
+              下記のボタンをクリックして領収書をダウンロードしてください
+            </p>
+          </div>
+
+          <div className="bg-white rounded-lg border p-6 space-y-4">
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>管理番号: {receiptData.managementNumber}</p>
+              <p>駐車場: {receiptData.parkingLotName}</p>
+              <p>合計金額: ¥{(receiptData.parkingFee - receiptData.discount).toLocaleString()}</p>
+            </div>
+
+            <Button
+              onClick={handleDownloadPDF}
+              disabled={isGenerating}
+              size="lg"
+              className="w-full gap-2"
+            >
+              <Download className="w-5 h-5" />
+              {isGenerating ? "PDFを生成中..." : "領収書をダウンロード"}
+            </Button>
+          </div>
+
+          {/* Hidden receipt template for PDF generation */}
+          <div className="sr-only">
+            <div ref={receiptRef}>
+              <ReceiptTemplate data={formattedData} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Normal app interface
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -221,7 +304,7 @@ export default function App() {
                       </Button>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      このURLを開くと自動的にPDFがダウンロードされます
+                      このURLを開くとダウンロードボタンが表示されます
                     </p>
                   </div>
                 </div>
@@ -278,7 +361,7 @@ export default function App() {
                       </Button>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      このURLを開くと自動的にPDFがダウンロードされます
+                      このURLを開くとダウンロードボタンが表示されます
                     </p>
                   </div>
                 )}
