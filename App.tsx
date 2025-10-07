@@ -48,7 +48,12 @@ function decodeReceiptData(encoded: string): ReceiptData | null {
 
 export default function App() {
   const receiptRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<string>("form");
+  
+  // Check if URL has receipt parameter and set initial tab accordingly
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasReceiptParam = urlParams.get("receipt") !== null;
+  
+  const [activeTab, setActiveTab] = useState<string>(hasReceiptParam ? "preview" : "form");
   const [isGenerating, setIsGenerating] = useState(false);
   const [shareableUrl, setShareableUrl] = useState<string>("");
   const [autoDownloadTriggered, setAutoDownloadTriggered] = useState(false);
@@ -74,24 +79,42 @@ export default function App() {
       if (decodedData) {
         setReceiptData(decodedData);
         setAutoDownloadTriggered(true);
-        // Trigger PDF download after a short delay to ensure rendering
-        setTimeout(() => {
-          downloadPDF(decodedData);
-        }, 500);
+        
+        // Wait for fonts to load before generating PDF
+        document.fonts.ready.then(() => {
+          // Additional delay to ensure component is fully rendered
+          setTimeout(() => {
+            downloadPDF(decodedData);
+          }, 1000);
+        }).catch((error) => {
+          console.error("Font loading failed:", error);
+          // Try to generate PDF anyway after a longer delay
+          setTimeout(() => {
+            downloadPDF(decodedData);
+          }, 2000);
+        });
       }
     }
   }, [autoDownloadTriggered]);
 
   // Generate PDF and download
   const downloadPDF = async (data: ReceiptData) => {
-    if (!receiptRef.current) return;
+    if (!receiptRef.current) {
+      console.error("Receipt element not found");
+      return;
+    }
 
     try {
+      // Wait a bit more to ensure everything is rendered
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       const canvas = await html2canvas(receiptRef.current, {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: "#ffffff",
+        windowWidth: receiptRef.current.scrollWidth,
+        windowHeight: receiptRef.current.scrollHeight,
       });
 
       const imgData = canvas.toDataURL("image/png");
