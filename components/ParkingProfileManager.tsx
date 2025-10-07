@@ -3,8 +3,8 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Select } from "./ui/select";
-import { Trash2, Plus } from "lucide-react";
+import { Trash2, Plus, Loader2 } from "lucide-react";
+import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 export interface ParkingProfile {
   id: string;
@@ -19,12 +19,14 @@ interface ParkingProfileManagerProps {
   onSelectProfile: (profile: ParkingProfile) => void;
 }
 
-const STORAGE_KEY = "parking_profiles";
+const SERVER_URL = `https://${projectId}.supabase.co/functions/v1/make-server-c9aa4dc3`;
 
 export function ParkingProfileManager({ onSelectProfile }: ParkingProfileManagerProps) {
   const [profiles, setProfiles] = useState<ParkingProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
   const [isAddingNew, setIsAddingNew] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newProfile, setNewProfile] = useState<Omit<ParkingProfile, "id">>({
     name: "",
     companyName: "",
@@ -33,25 +35,33 @@ export function ParkingProfileManager({ onSelectProfile }: ParkingProfileManager
     registrationNumber: "",
   });
 
-  // Load profiles from localStorage on mount
+  // Load profiles from Supabase on mount
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setProfiles(parsed);
-      } catch (error) {
-        console.error("Failed to load profiles:", error);
-      }
-    }
+    loadProfiles();
   }, []);
 
-  // Save profiles to localStorage whenever they change
-  useEffect(() => {
-    if (profiles.length > 0) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(profiles));
+  const loadProfiles = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${SERVER_URL}/profiles`, {
+        headers: {
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch profiles");
+      }
+
+      const data = await response.json();
+      setProfiles(data.profiles || []);
+    } catch (error) {
+      console.error("Failed to load profiles:", error);
+      alert("プロファイルの読み込みに失敗しました");
+    } finally {
+      setIsLoading(false);
     }
-  }, [profiles]);
+  };
 
   const handleSelectProfile = (profileId: string) => {
     setSelectedProfileId(profileId);
@@ -61,34 +71,72 @@ export function ParkingProfileManager({ onSelectProfile }: ParkingProfileManager
     }
   };
 
-  const handleAddProfile = () => {
+  const handleAddProfile = async () => {
     if (!newProfile.name || !newProfile.companyName || !newProfile.parkingLotName) {
       alert("プロファイル名、会社名、駐車場名は必須です");
       return;
     }
 
-    const profile: ParkingProfile = {
-      ...newProfile,
-      id: Date.now().toString(),
-    };
+    setIsSaving(true);
+    try {
+      const response = await fetch(`${SERVER_URL}/profiles`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+        body: JSON.stringify(newProfile),
+      });
 
-    setProfiles([...profiles, profile]);
-    setNewProfile({
-      name: "",
-      companyName: "",
-      parkingLotName: "",
-      phoneNumber: "",
-      registrationNumber: "",
-    });
-    setIsAddingNew(false);
+      if (!response.ok) {
+        throw new Error("Failed to create profile");
+      }
+
+      // Reload profiles from server
+      await loadProfiles();
+
+      setNewProfile({
+        name: "",
+        companyName: "",
+        parkingLotName: "",
+        phoneNumber: "",
+        registrationNumber: "",
+      });
+      setIsAddingNew(false);
+    } catch (error) {
+      console.error("Failed to add profile:", error);
+      alert("プロファイルの保存に失敗しました");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDeleteProfile = (profileId: string) => {
-    if (confirm("このプロファイルを削除してもよろしいですか？")) {
-      setProfiles(profiles.filter((p) => p.id !== profileId));
+  const handleDeleteProfile = async (profileId: string) => {
+    if (!confirm("このプロファイルを削除してもよろしいですか？")) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${SERVER_URL}/profiles/${profileId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete profile");
+      }
+
+      // Reload profiles from server
+      await loadProfiles();
+
       if (selectedProfileId === profileId) {
         setSelectedProfileId("");
       }
+    } catch (error) {
+      console.error("Failed to delete profile:", error);
+      alert("プロファイルの削除に失敗しました");
     }
   };
 
@@ -98,33 +146,43 @@ export function ParkingProfileManager({ onSelectProfile }: ParkingProfileManager
         <CardTitle>駐車場プロファイル管理</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Profile Selection */}
-        <div className="space-y-2">
-          <Label htmlFor="profile-select">登録済みプロファイルを選択</Label>
-          <div className="flex gap-2">
-            <select
-              id="profile-select"
-              value={selectedProfileId}
-              onChange={(e) => handleSelectProfile(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <option value="">プロファイルを選択してください</option>
-              {profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name} - {profile.parkingLotName}
-                </option>
-              ))}
-            </select>
-            <Button
-              onClick={() => setIsAddingNew(!isAddingNew)}
-              variant="outline"
-              size="icon"
-              className="shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
+        {/* Loading state */}
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 py-4">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span className="text-sm text-muted-foreground">プロファイルを読み込み中...</span>
           </div>
-        </div>
+        )}
+
+        {/* Profile Selection */}
+        {!isLoading && (
+          <div className="space-y-2">
+            <Label htmlFor="profile-select">登録済みプロファイルを選択</Label>
+            <div className="flex gap-2">
+              <select
+                id="profile-select"
+                value={selectedProfileId}
+                onChange={(e) => handleSelectProfile(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="">プロファイルを選択してください</option>
+                {profiles.map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name} - {profile.parkingLotName}
+                  </option>
+                ))}
+              </select>
+              <Button
+                onClick={() => setIsAddingNew(!isAddingNew)}
+                variant="outline"
+                size="icon"
+                className="shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* New Profile Form */}
         {isAddingNew && (
@@ -184,10 +242,17 @@ export function ParkingProfileManager({ onSelectProfile }: ParkingProfileManager
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={handleAddProfile} className="flex-1">
-                プロファイルを保存
+              <Button onClick={handleAddProfile} className="flex-1" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  "プロファイルを保存"
+                )}
               </Button>
-              <Button onClick={() => setIsAddingNew(false)} variant="outline" className="flex-1">
+              <Button onClick={() => setIsAddingNew(false)} variant="outline" className="flex-1" disabled={isSaving}>
                 キャンセル
               </Button>
             </div>

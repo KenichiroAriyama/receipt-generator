@@ -4,6 +4,7 @@ import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { useState, useEffect } from "react";
 import { Building2 } from "lucide-react";
+import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 interface ParkingProfile {
   id: string;
@@ -32,24 +33,36 @@ interface ReceiptFormProps {
   onGenerateURL: () => void;
 }
 
-const STORAGE_KEY = "parking_profiles";
+const SERVER_URL = `https://${projectId}.supabase.co/functions/v1/make-server-c9aa4dc3`;
 
 export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps) {
   const [profiles, setProfiles] = useState<ParkingProfile[]>([]);
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Load profiles from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setProfiles(parsed);
-      } catch (error) {
-        console.error("Failed to load profiles:", error);
-      }
-    }
+    loadProfiles();
   }, []);
+
+  const loadProfiles = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`${SERVER_URL}/profiles`, {
+        headers: {
+          Authorization: `Bearer ${publicAnonKey}`,
+        },
+      });
+
+      if (response.ok) {
+        const responseData = await response.json();
+        setProfiles(responseData.profiles || []);
+      }
+    } catch (error) {
+      console.error("Failed to load profiles:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleChange = (field: keyof ReceiptData, value: string | number) => {
     onChange({ ...data, [field]: value });
@@ -77,27 +90,24 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
       <CardContent className="space-y-6">
         {/* Profile Selection */}
         {profiles.length > 0 && (
-          <div className="space-y-2 p-4 bg-primary/5 rounded-lg border-2 border-primary/20">
+          <div className="space-y-2 p-4 bg-muted/30 rounded-lg border">
             <Label htmlFor="profile-select" className="flex items-center gap-2">
               <Building2 className="w-4 h-4" />
-              登録済みプロファイルから選択
+              登録済みプロファイルを選択
             </Label>
             <select
               id="profile-select"
               value={selectedProfileId}
               onChange={(e) => handleSelectProfile(e.target.value)}
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-9 w-full rounded-md border border-input bg-input-background px-3 py-1 text-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <option value="">プロファイルを選択（またはマニュアル入力）</option>
+              <option value="">プロファイルを選択してください</option>
               {profiles.map((profile) => (
                 <option key={profile.id} value={profile.id}>
                   {profile.name} - {profile.parkingLotName}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-muted-foreground">
-              プロファイルを選択すると、会社名・駐車場名・電話番号・登録番号が自動入力されます
-            </p>
           </div>
         )}
 
