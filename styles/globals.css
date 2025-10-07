@@ -187,3 +187,7 @@
 html {
   font-size: var(--font-size);
 }
+
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+}

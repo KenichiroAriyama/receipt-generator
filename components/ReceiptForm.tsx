@@ -38,7 +38,7 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
               id="companyName"
               value={data.companyName}
               onChange={(e) => handleChange("companyName", e.target.value)}
-              placeholder="株式会社ランディット"
+              placeholder="株式���社ランディット"
             />
           </div>
 
@@ -117,7 +117,7 @@ export function ReceiptForm({ data, onChange, onGenerateURL }: ReceiptFormProps)
 
         <div className="flex gap-2">
           <Button onClick={onGenerateURL} className="w-full">
-            PDFダウンロードURLを生成
+            共有URLを生成
           </Button>
         </div>
 

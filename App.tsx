@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ReceiptForm } from "./components/ReceiptForm";
 import { ReceiptTemplate } from "./components/ReceiptTemplate";
 import { Button } from "./components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "./components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { Download } from "lucide-react";
+import { Download, Link2 } from "lucide-react";
 
 interface ReceiptData {
   companyName: string;
@@ -29,11 +29,29 @@ function formatDate(dateString: string): string {
   return `${year}/${month}/${day}`;
 }
 
+// Encode receipt data to URL parameter
+function encodeReceiptData(data: ReceiptData): string {
+  const json = JSON.stringify(data);
+  return btoa(encodeURIComponent(json));
+}
+
+// Decode receipt data from URL parameter
+function decodeReceiptData(encoded: string): ReceiptData | null {
+  try {
+    const json = decodeURIComponent(atob(encoded));
+    return JSON.parse(json);
+  } catch (error) {
+    console.error("Failed to decode receipt data:", error);
+    return null;
+  }
+}
+
 export default function App() {
   const receiptRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState<string>("form");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [downloadUrl, setDownloadUrl] = useState<string>("");
+  const [shareableUrl, setShareableUrl] = useState<string>("");
+  const [autoDownloadTriggered, setAutoDownloadTriggered] = useState(false);
 
   const [receiptData, setReceiptData] = useState<ReceiptData>({
     companyName: "株式会社ランディット",
@@ -46,14 +64,27 @@ export default function App() {
     managementNumber: "20240403001",
   });
 
-  const handleGenerateURL = async () => {
+  // Check URL parameters on mount and auto-download PDF
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const receiptParam = urlParams.get("receipt");
+    
+    if (receiptParam && !autoDownloadTriggered) {
+      const decodedData = decodeReceiptData(receiptParam);
+      if (decodedData) {
+        setReceiptData(decodedData);
+        setAutoDownloadTriggered(true);
+        // Trigger PDF download after a short delay to ensure rendering
+        setTimeout(() => {
+          downloadPDF(decodedData);
+        }, 500);
+      }
+    }
+  }, [autoDownloadTriggered]);
+
+  // Generate PDF and download
+  const downloadPDF = async (data: ReceiptData) => {
     if (!receiptRef.current) return;
-
-    setIsGenerating(true);
-    setActiveTab("preview");
-
-    // Wait for tab change to render
-    await new Promise((resolve) => setTimeout(resolve, 100));
 
     try {
       const canvas = await html2canvas(receiptRef.current, {
@@ -75,23 +106,46 @@ export default function App() {
 
       pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
       
-      // Create Blob and URL
-      const pdfBlob = pdf.output("blob");
-      const url = URL.createObjectURL(pdfBlob);
-      setDownloadUrl(url);
+      // Download PDF
+      const fileName = `領収書_${data.managementNumber || 'receipt'}.pdf`;
+      pdf.save(fileName);
     } catch (error) {
       console.error("PDF generation failed:", error);
       alert("PDF生成に失敗しました。もう一度お試しください。");
+    }
+  };
+
+  const handleGenerateURL = () => {
+    setIsGenerating(true);
+    
+    try {
+      // Generate shareable URL with encoded data
+      const encoded = encodeReceiptData(receiptData);
+      const baseUrl = window.location.origin + window.location.pathname;
+      const url = `${baseUrl}?receipt=${encoded}`;
+      setShareableUrl(url);
+      
+      // Switch to preview tab to show the URL
+      setActiveTab("preview");
+    } catch (error) {
+      console.error("URL generation failed:", error);
+      alert("URL生成に失敗しました。もう一度お試しください。");
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleCopyUrl = () => {
-    if (downloadUrl) {
-      navigator.clipboard.writeText(downloadUrl);
+    if (shareableUrl) {
+      navigator.clipboard.writeText(shareableUrl);
       alert("URLをコピーしました");
     }
+  };
+
+  const handleDownloadPDF = async () => {
+    setIsGenerating(true);
+    await downloadPDF(receiptData);
+    setIsGenerating(false);
   };
 
   // Format data for display
@@ -117,55 +171,98 @@ export default function App() {
           </TabsList>
 
           <TabsContent value="form" className="mt-6">
-            <div className="flex justify-center">
-              <ReceiptForm
-                data={receiptData}
-                onChange={setReceiptData}
-                onGenerateURL={handleGenerateURL}
-              />
+            <div className="space-y-6">
+              <div className="flex justify-center">
+                <ReceiptForm
+                  data={receiptData}
+                  onChange={setReceiptData}
+                  onGenerateURL={handleGenerateURL}
+                />
+              </div>
+
+              {shareableUrl && (
+                <div className="flex justify-center">
+                  <div className="w-full max-w-2xl space-y-3 bg-white rounded-lg border p-6">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Link2 className="w-4 h-4" />
+                      <span>共有用URL</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        value={shareableUrl}
+                        readOnly
+                        className="flex-1 font-mono text-sm"
+                      />
+                      <Button onClick={handleCopyUrl} variant="outline">
+                        コピー
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      このURLを開くと自動的にPDFがダウンロードされます
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="preview" className="mt-6">
             <div className="space-y-4">
               <div className="flex flex-col items-center gap-4">
-                <Button
-                  onClick={handleGenerateURL}
-                  disabled={isGenerating}
-                  size="lg"
-                  className="gap-2"
-                >
-                  <Download className="w-4 h-4" />
-                  {isGenerating ? "URL生成中..." : "PDFダウンロードURLを生成"}
-                </Button>
+                <div className="flex gap-3">
+                  <Button
+                    onClick={handleGenerateURL}
+                    disabled={isGenerating}
+                    size="lg"
+                    className="gap-2"
+                  >
+                    <Link2 className="w-4 h-4" />
+                    {isGenerating ? "URL生成中..." : "共有URLを生成"}
+                  </Button>
+                  
+                  <Button
+                    onClick={handleDownloadPDF}
+                    disabled={isGenerating}
+                    size="lg"
+                    variant="outline"
+                    className="gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    {isGenerating ? "生成中..." : "PDFダウンロード"}
+                  </Button>
+                </div>
 
-                {downloadUrl && (
-                  <div className="w-full max-w-2xl space-y-2">
+                {shareableUrl && (
+                  <div className="w-full max-w-2xl space-y-3 bg-white rounded-lg border p-6">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <Link2 className="w-4 h-4" />
+                      <span>共有用URL</span>
+                    </div>
                     <div className="flex gap-2">
                       <Input
-                        value={downloadUrl}
+                        value={shareableUrl}
                         readOnly
-                        className="flex-1"
+                        className="flex-1 font-mono text-sm"
                       />
                       <Button onClick={handleCopyUrl} variant="outline">
                         コピー
                       </Button>
                       <Button
-                        onClick={() => window.open(downloadUrl, "_blank")}
+                        onClick={() => window.open(shareableUrl, "_blank")}
                         variant="outline"
                       >
                         開く
                       </Button>
                     </div>
-                    <p className="text-sm text-muted-foreground text-center">
-                      URLを開くとPDFがダウンロードされます
+                    <p className="text-sm text-muted-foreground">
+                      このURLを開くと自動的にPDFがダウンロードされます
                     </p>
                   </div>
                 )}
               </div>
 
               <div className="flex justify-center">
-                <div className="bg-white max-w-4xl">
+                <div className="bg-white max-w-4xl shadow-lg">
                   <div ref={receiptRef}>
                     <ReceiptTemplate data={formattedData} />
                   </div>
